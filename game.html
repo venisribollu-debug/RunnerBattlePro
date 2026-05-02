@@ -1,27 +1,55 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
-<title>Runner Battle PRO 🔥</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Runner Battle PRO 🔥</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
-<style>
-body { background:#000; color:white; text-align:center; font-family:Arial; }
-canvas { background:#222; border-radius:10px; }
-#chat { height:120px; overflow:auto; background:#111; margin-top:10px; }
-button { padding:10px; margin:5px; }
-</style>
+  <style>
+    body {
+      background:#000;
+      color:white;
+      text-align:center;
+      font-family:Arial;
+      margin:0;
+    }
+
+    canvas {
+      background:#222;
+      border-radius:10px;
+      margin-top:10px;
+    }
+
+    #chat {
+      height:120px;
+      overflow-y:auto;
+      background:#111;
+      margin:10px;
+      padding:5px;
+      text-align:left;
+    }
+
+    input, button {
+      padding:10px;
+      margin:5px;
+      border-radius:6px;
+      border:none;
+    }
+  </style>
 </head>
 
 <body>
 
 <h1>🏃 Runner Battle PRO</h1>
 
-<input id="username" placeholder="Name">
+<input id="username" placeholder="Username">
 <input id="room" placeholder="Room">
 <button onclick="join()">Start</button>
+
+<br>
 
 <canvas id="game" width="400" height="200"></canvas>
 
@@ -29,11 +57,14 @@ button { padding:10px; margin:5px; }
 <div id="leaderboard"></div>
 
 <div id="chat"></div>
-<input id="msg"><button onclick="send()">Send</button>
+<input id="msg" placeholder="Type message">
+<button onclick="send()">Send</button>
 
-<button onclick="slowOpponent()">😈 Slow</button>
+<br>
+<button onclick="slowOpponent()">😈 Slow Opponent</button>
 
 <script>
+// 🔥 YOUR FIREBASE CONFIG
 const firebaseConfig = {
   apiKey: "AIzaSyDnKwEe3HU6GhUP5FYaS-mdOhW6N2DGFGQ",
   authDomain: "game-making-747c0.firebaseapp.com",
@@ -43,114 +74,197 @@ const firebaseConfig = {
   appId: "1:54678058247:web:036525d5d386bed1c8c1a2",
   measurementId: "G-CBHR4JX3LQ"
 };
+
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
+// 🎤 VOICE CHAT SETUP
+let localStream;
 
+navigator.mediaDevices.getUserMedia({ audio: true })
+.then(stream => {
+  localStream = stream;
+  console.log("🎤 Mic ready");
+})
+.catch(err => {
+  alert("Please allow microphone access!");
+});
+// VARIABLES
 let username, room;
 let canvas = document.getElementById("game");
 let ctx = canvas.getContext("2d");
 
 let player = {x:50,y:150,vy:0,jumping:false};
-let obstacles=[], score=0, speed=5, running=false;
+let obstacles = [];
+let score = 0;
+let speed = 5;
+let running = false;
 
-// JOIN
+// JOIN GAME
 function join(){
-  username = usernameInput.value;
-  room = roomInput.value;
+  username = document.getElementById("username").value;
+  room = document.getElementById("room").value;
+
+  if(!username || !room){
+    alert("Enter username & room!");
+    return;
+  }
+
   running = true;
 
   db.ref("rooms/"+room+"/players/"+username).set({score:0});
 
-  listenScores();
+  listenLeaderboard();
   listenChat();
+  listenEffects();
+
+  startGame();
+}
+
+// START GAME
+function startGame(){
+  score = 0;
+  obstacles = [];
   gameLoop();
 }
 
-// JUMP
-document.addEventListener("keydown",e=>{
-  if(e.code==="Space" && !player.jumping){
-    player.vy=-10; player.jumping=true;
-  }
+// JUMP (PC + MOBILE)
+document.addEventListener("keydown", e=>{
+  if(e.code==="Space") jump();
 });
+canvas.addEventListener("click", jump);
 
-// LOOP
+function jump(){
+  if(!player.jumping){
+    player.vy = -10;
+    player.jumping = true;
+  }
+}
+
+// GAME LOOP
 function gameLoop(){
   if(!running) return;
 
   ctx.clearRect(0,0,400,200);
 
-  player.y+=player.vy;
-  player.vy+=0.8;
-  if(player.y>=150){ player.y=150; player.jumping=false; }
+  // physics
+  player.y += player.vy;
+  player.vy += 0.8;
 
-  ctx.fillStyle="cyan";
-  ctx.fillRect(player.x,player.y,20,20);
+  if(player.y >= 150){
+    player.y = 150;
+    player.jumping = false;
+  }
 
-  obstacles.forEach(o=>{
-    o.x-=speed;
-    ctx.fillStyle="red";
-    ctx.fillRect(o.x,o.y,20,20);
+  // draw player
+  ctx.fillStyle = "cyan";
+  ctx.fillRect(player.x, player.y, 20, 20);
 
-    if(player.x<o.x+20 && player.x+20>o.x && player.y<o.y+20){
+  // obstacles
+  for(let i=0;i<obstacles.length;i++){
+    let o = obstacles[i];
+    o.x -= speed;
+
+    ctx.fillStyle = "red";
+    ctx.fillRect(o.x, o.y, 20, 20);
+
+    // collision
+    if(player.x < o.x+20 &&
+       player.x+20 > o.x &&
+       player.y < o.y+20){
       gameOver();
     }
-  });
+  }
 
-  obstacles=obstacles.filter(o=>o.x>-20);
+  obstacles = obstacles.filter(o=>o.x>-20);
 
+  // score
   score++;
   ctx.fillStyle="white";
-  ctx.fillText("Score:"+score,10,20);
+  ctx.fillText("Score: "+score,10,20);
+
+  document.getElementById("score").innerHTML = "Your Score: "+score;
 
   requestAnimationFrame(gameLoop);
 }
 
-// OBSTACLES
-setInterval(()=>{ if(running) obstacles.push({x:400,y:150}); },1500);
+// SPAWN OBSTACLES
+setInterval(()=>{
+  if(running){
+    obstacles.push({x:400,y:150});
+  }
+},1500);
 
 // GAME OVER
 function gameOver(){
-  running=false;
+  running = false;
+
   db.ref("rooms/"+room+"/players/"+username+"/score").set(score);
+
   db.ref("leaderboard/"+username).transaction(s=>(s||0)+score);
-  alert("Game Over "+score);
+
+  alert("💀 Game Over! Score: "+score);
 }
 
 // LEADERBOARD
-function listenScores(){
-  db.ref("leaderboard").on("value",snap=>{
-    let d=snap.val(), html="<h3>🏆</h3>";
-    Object.entries(d||{}).sort((a,b)=>b[1]-a[1]).slice(0,5)
-    .forEach(([n,s])=> html+=n+":"+s+"<br>");
-    leaderboard.innerHTML=html;
+function listenLeaderboard(){
+  db.ref("leaderboard").on("value", snap=>{
+    let data = snap.val() || {};
+    let html = "<h3>🏆 Leaderboard</h3>";
+
+    let sorted = Object.entries(data)
+      .sort((a,b)=>b[1]-a[1])
+      .slice(0,5);
+
+    sorted.forEach(([name,score],i)=>{
+      html += `${i+1}. ${name}: ${score}<br>`;
+    });
+
+    document.getElementById("leaderboard").innerHTML = html;
   });
 }
 
 // CHAT
 function send(){
-  db.ref("rooms/"+room+"/chat").push({user:username,msg:msg.value});
-  msg.value="";
+  let msg = document.getElementById("msg").value;
+  if(!msg) return;
+
+  db.ref("rooms/"+room+"/chat").push({
+    user: username,
+    msg: msg
+  });
+
+  document.getElementById("msg").value = "";
 }
 
 function listenChat(){
-  db.ref("rooms/"+room+"/chat").on("child_added",snap=>{
-    let c=snap.val();
-    chat.innerHTML+=c.user+": "+c.msg+"<br>";
+  db.ref("rooms/"+room+"/chat").on("child_added", snap=>{
+    let c = snap.val();
+
+    let chatDiv = document.getElementById("chat");
+    chatDiv.innerHTML += `<div><b>${c.user}:</b> ${c.msg}</div>`;
+
+    chatDiv.scrollTop = chatDiv.scrollHeight;
   });
 }
 
 // POWERUP
 function slowOpponent(){
-  db.ref("rooms/"+room+"/effect").set({type:"slow"});
+  db.ref("rooms/"+room+"/effect").set({
+    type:"slow"
+  });
 }
 
-db.ref("rooms/"+room+"/effect").on("value",snap=>{
-  let e=snap.val();
-  if(e && e.type==="slow"){
-    speed=2;
-    setTimeout(()=>speed=5,3000);
-  }
-});
+function listenEffects(){
+  db.ref("rooms/"+room+"/effect").on("value", snap=>{
+    let e = snap.val();
+
+    if(e && e.type==="slow"){
+      speed = 2;
+      setTimeout(()=>speed=5,3000);
+    }
+  });
+}
 </script>
+
 </body>
 </html>
