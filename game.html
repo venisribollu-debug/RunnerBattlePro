@@ -1,293 +1,315 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Runner Battle PRO 🔥</title>
+  <title>Runner Battle PRO GOD 🔥</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+
   <style>
-    body {
-      background:#000;
-      color:white;
-      text-align:center;
-      font-family:Arial;
-      margin:0;
-    }
-
-    canvas {
-      background:#222;
-      border-radius:10px;
-      margin-top:10px;
-    }
-
-    #chat {
-      height:120px;
-      overflow-y:auto;
-      background:#111;
-      margin:10px;
-      padding:5px;
-      text-align:left;
-    }
-
-    input, button {
-      padding:10px;
-      margin:5px;
-      border-radius:6px;
-      border:none;
-    }
+    body { background:#000; color:white; text-align:center; margin:0; font-family:Arial;}
+    canvas { background:#222; border-radius:10px; margin-top:10px; }
+    button,input { padding:10px; margin:5px; border:none; border-radius:6px; }
   </style>
 </head>
 
 <body>
 
-<h1>🏃 Runner Battle PRO</h1>
+<h2>🏃 Runner Battle PRO GOD LEVEL</h2>
 
 <input id="username" placeholder="Username">
-<input id="room" placeholder="Room">
+<input id="room" placeholder="Room (leave empty for auto)">
 <button onclick="join()">Start</button>
 
 <br>
 
+<button onclick="buySkin('red')">🔴 Skin (100)</button>
+<button onclick="buySkin('green')">🟢 Skin (200)</button>
+
+<button id="installBtn">📱 Install</button>
+
 <canvas id="game" width="400" height="200"></canvas>
 
 <div id="score"></div>
-<div id="leaderboard"></div>
-
-<div id="chat"></div>
-<input id="msg" placeholder="Type message">
-<button onclick="send()">Send</button>
-
-<br>
-<button onclick="slowOpponent()">😈 Slow Opponent</button>
 
 <script>
-// 🔥 YOUR FIREBASE CONFIG
-const firebaseConfig = {
-  apiKey: "AIzaSyDnKwEe3HU6GhUP5FYaS-mdOhW6N2DGFGQ",
-  authDomain: "game-making-747c0.firebaseapp.com",
-  projectId: "game-making-747c0",
-  storageBucket: "game-making-747c0.firebasestorage.app",
-  messagingSenderId: "54678058247",
-  appId: "1:54678058247:web:036525d5d386bed1c8c1a2",
-  measurementId: "G-CBHR4JX3LQ"
-};
 
+// 🔥 FIREBASE CONFIG
+const firebaseConfig = {
+  apiKey: "YOUR KEY",
+  authDomain: "YOUR DOMAIN",
+  projectId: "YOUR PROJECT"
+};
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
-// 🎤 VOICE CHAT SETUP
-let localStream;
 
-navigator.mediaDevices.getUserMedia({ audio: true })
-.then(stream => {
-  localStream = stream;
-  console.log("🎤 Mic ready");
-})
-.catch(err => {
-  alert("Please allow microphone access!");
-});
 // VARIABLES
-let magnet = false;
-let startX = 0;
 let username, room;
 let canvas = document.getElementById("game");
 let ctx = canvas.getContext("2d");
 
 let player = {x:50,y:150,vy:0,jumping:false};
-let lane = 1; // 0 left, 1 middle, 2 right
-let laneX = [80, 180, 280];
+let lane = 1;
+let laneX = [80,180,280];
+
 let obstacles = [];
+let coins = [];
+let otherPlayers = {};
+
 let score = 0;
+let totalCoins = 0;
 let speed = 5;
 let running = false;
 
-// JOIN GAME
+let shield = false;
+let magnet = false;
+let playerColor = "cyan";
+let startX = 0;
+
+// JOIN
 function join(){
   username = document.getElementById("username").value;
   room = document.getElementById("room").value;
 
-  if(!username || !room){
-    alert("Enter username & room!");
-    return;
+  if(!username) return alert("Enter username");
+
+  if(!room){
+    room = "room" + Math.floor(Math.random()*1000);
   }
 
   running = true;
 
-  db.ref("rooms/"+room+"/players/"+username).set({score:0});
-
-  listenLeaderboard();
-  listenChat();
-  listenEffects();
-
+  giveDailyReward();
+  listenPlayers();
   startGame();
 }
 
-// START GAME
+// DAILY REWARD
+function giveDailyReward(){
+  let today = new Date().toDateString();
+
+  db.ref("users/"+username+"/lastReward").once("value", snap=>{
+    if(snap.val() !== today){
+      db.ref("users/"+username+"/coins")
+        .transaction(c => (c||0)+100);
+
+      db.ref("users/"+username+"/lastReward").set(today);
+      alert("🎁 +100 Daily Coins!");
+    }
+  });
+}
+
+// START
 function startGame(){
   score = 0;
+  totalCoins = 0;
   obstacles = [];
+  coins = [];
   gameLoop();
 }
 
-// JUMP (PC + MOBILE)
+// CONTROLS
 document.addEventListener("keydown", e=>{
+  if(e.key==="ArrowLeft" && lane>0) lane--;
+  if(e.key==="ArrowRight" && lane<2) lane++;
   if(e.code==="Space") jump();
 });
+
 canvas.addEventListener("click", jump);
 
+canvas.addEventListener("touchstart", e=>{
+  startX = e.touches[0].clientX;
+});
+canvas.addEventListener("touchend", e=>{
+  let endX = e.changedTouches[0].clientX;
+  if(endX-startX>50 && lane<2) lane++;
+  if(startX-endX>50 && lane>0) lane--;
+});
+
+// JUMP
 function jump(){
   if(!player.jumping){
     player.vy = -10;
     player.jumping = true;
   }
 }
-document.addEventListener("keydown", e=>{
-  if(e.key === "ArrowLeft" && lane > 0) lane--;
-  if(e.key === "ArrowRight" && lane < 2) lane++;
-  if(e.code==="Space") jump();
-});canvas.addEventListener("touchstart", e=>{
-  startX = e.touches[0].clientX;
-});
 
-canvas.addEventListener("touchend", e=>{
-  let endX = e.changedTouches[0].clientX;
-
-  if(endX - startX > 50 && lane < 2) lane++;
-  if(startX - endX > 50 && lane > 0) lane--;
-});
 // GAME LOOP
 function gameLoop(){
   if(!running) return;
 
   ctx.clearRect(0,0,400,200);
+
   player.x = laneX[lane];
-  // physics
+
   player.y += player.vy;
   player.vy += 0.8;
+  if(player.y>=150){ player.y=150; player.jumping=false; }
 
-  if(player.y >= 150){
-    player.y = 150;
-    player.jumping = false;
+  ctx.shadowColor = shield ? "cyan" : "transparent";
+  ctx.shadowBlur = shield ? 20 : 0;
+  ctx.fillStyle = playerColor;
+  ctx.fillRect(player.x,player.y,20,20);
+
+  // MULTIPLAYER
+  db.ref("rooms/"+room+"/positions/"+username).set({
+    x:player.x,y:player.y
+  });
+
+  for(let p in otherPlayers){
+    if(p!==username){
+      let op = otherPlayers[p];
+      ctx.fillStyle="orange";
+      ctx.fillRect(op.x,op.y,20,20);
+      ctx.fillText(p,op.x,op.y-5);
+    }
   }
 
-  // draw player
-  ctx.fillStyle = "cyan";
-  ctx.fillRect(player.x, player.y, 20, 20);
-
-  // obstacles
-  for(let i=0;i<obstacles.length;i++){
-    let o = obstacles[i];
+  // OBSTACLES
+  obstacles.forEach(o=>{
     o.x -= speed;
 
-    ctx.fillStyle = "red";
-    ctx.fillRect(o.x, o.y, 20, 20);
+    ctx.fillStyle = o.type==="train" ? "purple" : "red";
+    ctx.fillRect(o.x,o.y,o.width,o.height);
 
-    // collision
-    if(player.x === o.x && player.y >= 130){
-  gameOver();
-}
+    if(player.x < o.x+o.width &&
+       player.x+20 > o.x &&
+       player.y < o.y+o.height){
+
+      if(shield){ shield=false; }
+      else gameOver();
+    }
+  });
+
+  obstacles = obstacles.filter(o=>o.x>-50);
+
+  // COINS
+  coins.forEach(c=>{
+    c.x -= speed;
+
+    if(magnet && c.x > player.x) c.x -= 3;
+
+    ctx.fillStyle="yellow";
+    ctx.fillRect(c.x,c.y,10,10);
+
+    if(player.x < c.x+10 &&
+       player.x+20 > c.x &&
+       player.y < c.y+10){
+
+      score += 20;
+      totalCoins += 20;
+      c.x = -100;
+    }
+  });
+
+  coins = coins.filter(c=>c.x>-50);
+
+  // POWERS
+  if(score%300===0 && score>0){
+    magnet=true;
+    setTimeout(()=>magnet=false,4000);
   }
 
-  obstacles = obstacles.filter(o=>o.x>-20);
+  if(score%500===0 && score>0){
+    shield=true;
+    setTimeout(()=>shield=false,4000);
+  }
 
-  // score
   score++;
-  ctx.fillStyle="white";
-  ctx.fillText("Score: "+score,10,20);
 
-  document.getElementById("score").innerHTML = "Your Score: "+score;
+  // RANK
+  let rank="Bronze";
+  if(score>500) rank="Silver";
+  if(score>1000) rank="Gold";
+  if(score>2000) rank="Legend";
+
+  document.getElementById("score").innerHTML =
+    `Score:${score} | Coins:${totalCoins} | 🏆 ${rank}`;
 
   requestAnimationFrame(gameLoop);
 }
 
-// SPAWN OBSTACLES
+// SPAWN
 setInterval(()=>{
   if(running){
-    let randomLane = Math.floor(Math.random()*3);
-
-    let isTrain = Math.random() > 0.6; // 40% chance train
+    let laneR=Math.floor(Math.random()*3);
+    let isTrain=Math.random()>0.6;
 
     obstacles.push({
-      x: laneX[randomLane],
-      y: isTrain ? 120 : 150,
-      width: 20,
-      height: isTrain ? 40 : 20,
-      type: isTrain ? "train" : "block"
+      x:laneX[laneR],
+      y:isTrain?120:150,
+      width:20,
+      height:isTrain?40:20,
+      type:isTrain?"train":"block"
     });
   }
-},1500);
+},1200);
+
+setInterval(()=>{
+  if(running){
+    let laneR=Math.floor(Math.random()*3);
+    coins.push({x:laneX[laneR],y:140});
+  }
+},1000);
+
 // GAME OVER
 function gameOver(){
-  running = false;
+  running=false;
 
-  db.ref("rooms/"+room+"/players/"+username+"/score").set(score);
+  db.ref("users/"+username+"/coins")
+    .transaction(c=>(c||0)+totalCoins);
 
-  db.ref("leaderboard/"+username).transaction(s=>(s||0)+score);
+  db.ref("users/"+username+"/rank").set(getRank());
 
-  alert("💀 Game Over! Score: "+score);
+  alert("💀 Game Over!");
 }
 
-// LEADERBOARD
-function listenLeaderboard(){
-  db.ref("leaderboard").on("value", snap=>{
-    let data = snap.val() || {};
-    let html = "<h3>🏆 Leaderboard</h3>";
+// RANK FUNC
+function getRank(){
+  if(score>2000) return "Legend";
+  if(score>1000) return "Gold";
+  if(score>500) return "Silver";
+  return "Bronze";
+}
 
-    let sorted = Object.entries(data)
-      .sort((a,b)=>b[1]-a[1])
-      .slice(0,5);
-
-    sorted.forEach(([name,score],i)=>{
-      html += `${i+1}. ${name}: ${score}<br>`;
-    });
-
-    document.getElementById("leaderboard").innerHTML = html;
+// MULTIPLAYER
+function listenPlayers(){
+  db.ref("rooms/"+room+"/positions").on("value", snap=>{
+    otherPlayers = snap.val() || {};
   });
 }
 
-// CHAT
-function send(){
-  let msg = document.getElementById("msg").value;
-  if(!msg) return;
+// SKINS
+function buySkin(color){
+  let cost=color==="red"?100:200;
 
-  db.ref("rooms/"+room+"/chat").push({
-    user: username,
-    msg: msg
-  });
+  db.ref("users/"+username+"/coins").once("value", snap=>{
+    let c=snap.val()||0;
 
-  document.getElementById("msg").value = "";
-}
-
-function listenChat(){
-  db.ref("rooms/"+room+"/chat").on("child_added", snap=>{
-    let c = snap.val();
-
-    let chatDiv = document.getElementById("chat");
-    chatDiv.innerHTML += `<div><b>${c.user}:</b> ${c.msg}</div>`;
-
-    chatDiv.scrollTop = chatDiv.scrollHeight;
+    if(c>=cost){
+      db.ref("users/"+username+"/coins").set(c-cost);
+      playerColor=color;
+      alert("Skin equipped!");
+    } else alert("Not enough coins");
   });
 }
 
-// POWERUP
-function slowOpponent(){
-  db.ref("rooms/"+room+"/effect").set({
-    type:"slow"
-  });
-}
+// INSTALL
+let deferredPrompt;
+window.addEventListener("beforeinstallprompt", e=>{
+  e.preventDefault();
+  deferredPrompt=e;
+});
 
-function listenEffects(){
-  db.ref("rooms/"+room+"/effect").on("value", snap=>{
-    let e = snap.val();
+document.getElementById("installBtn").onclick=()=>{
+  if(deferredPrompt) deferredPrompt.prompt();
+};
 
-    if(e && e.type==="slow"){
-      speed = 2;
-      setTimeout(()=>speed=5,3000);
-    }
-  });
-}
 </script>
 
 </body>
