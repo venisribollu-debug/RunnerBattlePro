@@ -89,11 +89,15 @@ navigator.mediaDevices.getUserMedia({ audio: true })
   alert("Please allow microphone access!");
 });
 // VARIABLES
+let magnet = false;
+let startX = 0;
 let username, room;
 let canvas = document.getElementById("game");
 let ctx = canvas.getContext("2d");
 
 let player = {x:50,y:150,vy:0,jumping:false};
+let lane = 1; // 0 left, 1 middle, 2 right
+let laneX = [80, 180, 280];
 let obstacles = [];
 let score = 0;
 let speed = 5;
@@ -139,13 +143,26 @@ function jump(){
     player.jumping = true;
   }
 }
+document.addEventListener("keydown", e=>{
+  if(e.key === "ArrowLeft" && lane > 0) lane--;
+  if(e.key === "ArrowRight" && lane < 2) lane++;
+  if(e.code==="Space") jump();
+});canvas.addEventListener("touchstart", e=>{
+  startX = e.touches[0].clientX;
+});
 
+canvas.addEventListener("touchend", e=>{
+  let endX = e.changedTouches[0].clientX;
+
+  if(endX - startX > 50 && lane < 2) lane++;
+  if(startX - endX > 50 && lane > 0) lane--;
+});
 // GAME LOOP
 function gameLoop(){
   if(!running) return;
 
   ctx.clearRect(0,0,400,200);
-
+  player.x = laneX[lane];
   // physics
   player.y += player.vy;
   player.vy += 0.8;
@@ -168,11 +185,9 @@ function gameLoop(){
     ctx.fillRect(o.x, o.y, 20, 20);
 
     // collision
-    if(player.x < o.x+20 &&
-       player.x+20 > o.x &&
-       player.y < o.y+20){
-      gameOver();
-    }
+    if(player.x === o.x && player.y >= 130){
+  gameOver();
+}
   }
 
   obstacles = obstacles.filter(o=>o.x>-20);
@@ -190,10 +205,19 @@ function gameLoop(){
 // SPAWN OBSTACLES
 setInterval(()=>{
   if(running){
-    obstacles.push({x:400,y:150});
+    let randomLane = Math.floor(Math.random()*3);
+
+    let isTrain = Math.random() > 0.6; // 40% chance train
+
+    obstacles.push({
+      x: laneX[randomLane],
+      y: isTrain ? 120 : 150,
+      width: 20,
+      height: isTrain ? 40 : 20,
+      type: isTrain ? "train" : "block"
+    });
   }
 },1500);
-
 // GAME OVER
 function gameOver(){
   running = false;
