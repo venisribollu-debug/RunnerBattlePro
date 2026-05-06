@@ -9,7 +9,14 @@
   <meta name="theme-color" content="#ff00aa">
 
   <style>
-    body { background:#000; color:white; text-align:center; margin:0; font-family:Arial; overflow:hidden; }
+    body { 
+      background:#000; 
+      color:white; 
+      text-align:center; 
+      margin:0; 
+      font-family:Arial, sans-serif; 
+      overflow:hidden; 
+    }
     .container { max-width:420px; margin:0 auto; padding:10px; }
     canvas { 
       background: linear-gradient(#0a001f, #1a0033); 
@@ -18,9 +25,23 @@
       display:block; 
       box-shadow:0 0 30px #ff00ff;
     }
-    input, button { padding:12px; margin:6px; border-radius:8px; font-size:16px; }
-    button { background:#ff00aa; color:white; font-weight:bold; }
-    #score { font-size:20px; margin:8px; font-weight:bold; text-shadow:0 0 10px #ff00ff; }
+    input, button { 
+      padding:12px; 
+      margin:6px; 
+      border-radius:8px; 
+      font-size:16px; 
+    }
+    button { 
+      background:#ff00aa; 
+      color:white; 
+      font-weight:bold; 
+    }
+    #score { 
+      font-size:20px; 
+      margin:8px; 
+      font-weight:bold; 
+      text-shadow:0 0 10px #ff00ff; 
+    }
   </style>
 </head>
 <body>
@@ -37,17 +58,14 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
 <script>
-// ==================== FIREBASE ====================
-const firebaseConfig =
- {
-  apiKey: "AIzaSyDnKwEe3HU6GhUP5FYaS-mdOhW6N2DGFGQ",
-  authDomain: "game-making-747c0.firebaseapp.com",
-  projectId: "game-making-747c0",
-  storageBucket: "game-making-747c0.firebasestorage.app",
-  messagingSenderId: "54678058247",
-  appId: "1:54678058247:web:036525d5d386bed1c8c1a2",
-  measurementId: "G-CBHR4JX3LQ"
+// ==================== FIREBASE CONFIG ====================
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY_HERE",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT",
+  databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com"
 };
+
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
@@ -78,20 +96,25 @@ const bgm = new Audio('bgm.mp3');
 const gameoverSound = new Audio('gameover.mp3');
 bgm.loop = true;
 
-// ==================== JOIN ====================
+// ==================== JOIN GAME ====================
 function joinGame() {
-  username = document.getElementById("username").value.trim() || "Runner"+Math.floor(Math.random()*999);
-  room = document.getElementById("room").value.trim() || "global"+Math.floor(Math.random()*999);
+  username = document.getElementById("username").value.trim() || "Runner" + Math.floor(Math.random()*999);
+  room = document.getElementById("room").value.trim() || "global" + Math.floor(Math.random()*999);
 
   running = true;
-  bgm.play().catch(()=>{}); // autoplay may be blocked
+  bgm.play().catch(() => {});
   listenToPlayers();
   startGame();
 }
 
 function startGame() {
-  score = 0; totalCoins = 0; speed = 6; multiplier = 1;
-  obstacles = []; coins = []; powerups = [];
+  score = 0; 
+  totalCoins = 0; 
+  speed = 6; 
+  multiplier = 1;
+  obstacles = []; 
+  coins = []; 
+  powerups = [];
   player.y = 140;
   gameLoop();
 }
@@ -104,8 +127,7 @@ canvas.addEventListener("touchstart", e => {
 });
 
 canvas.addEventListener("touchend", e => {
-  let dy = e.changedTouches[0].clientY - touchStartY;
-  if (dy > 40) slide();
+  if (e.changedTouches[0].clientY - touchStartY > 40) slide();
 });
 
 document.addEventListener("keydown", e => {
@@ -116,7 +138,9 @@ document.addEventListener("keydown", e => {
 });
 
 function jump() {
-  if (player.y >= 138 && !player.sliding) player.vy = -17;
+  if (player.y >= 138 && !player.sliding) {
+    player.vy = -13.5;   // Smooth & Slow Jump
+  }
 }
 
 function slide() {
@@ -134,12 +158,19 @@ function gameLoop() {
   bgOffset -= speed * 0.6;
   drawBackground();
 
-  // Player Movement
+  // Smooth Lane Change
   player.x += (laneX[player.lane] - player.x) * 0.28;
-  player.vy += 0.9;
-  player.y += player.vy;
-  if (player.y >= 140) { player.y = 140; player.vy = 0; }
 
+  // Smooth Jump Physics
+  player.vy += 0.65;      // Reduced gravity = smoother jump
+  player.y += player.vy;
+
+  if (player.y >= 140) {
+    player.y = 140;
+    player.vy = 0;
+  }
+
+  // Slide Timer
   if (player.slideTime > 0) {
     player.slideTime--;
     if (player.slideTime === 0) player.sliding = false;
@@ -148,15 +179,15 @@ function gameLoop() {
   player.animFrame = (player.animFrame + 0.3) % 4;
 
   drawPlayer();
-
   updateObstacles();
   updateCoins();
   updatePowerups();
   updateParticles();
   updateMultiplayer();
 
+  // Score & Speed
   score += 0.3 * multiplier;
-  if (score % 400 < 0.4) speed += 0.3;
+  if (score % 380 < 0.4) speed += 0.28;
 
   document.getElementById("score").innerHTML = 
     `Score: ${Math.floor(score)} | Coins: ${totalCoins} ${multiplier>1?'(x'+multiplier+')':''}`;
@@ -166,23 +197,14 @@ function gameLoop() {
 
 // ==================== BACKGROUND ====================
 function drawBackground() {
-  // Buildings
   ctx.fillStyle = "#220033";
   for (let i = 0; i < 6; i++) {
     let x = (i * 90 + bgOffset * 0.3) % 550 - 50;
     ctx.fillRect(x, 60, 60, 100);
-    ctx.fillRect(x+15, 40, 25, 30);
-  }
-
-  // Far Trains
-  ctx.fillStyle = "#440066";
-  for (let i = 0; i < 3; i++) {
-    let x = (i * 250 + bgOffset * 0.8) % 800 - 100;
-    ctx.fillRect(x, 110, 80, 35);
   }
 }
 
-// ==================== PLAYER (Better Animation) ====================
+// ==================== PLAYER (Animated) ====================
 function drawPlayer() {
   ctx.shadowColor = "#00ffff";
   ctx.shadowBlur = 25;
@@ -204,11 +226,10 @@ function drawPlayer() {
     ctx.fillRect(player.x + 8, bodyY + 22, 6, 8 + legOffset);
     ctx.fillRect(player.x + 20, bodyY + 22, 6, 8 - legOffset);
   }
-
   ctx.shadowBlur = 0;
 }
 
-// ==================== OBSTACLES, COINS, POWERUPS ====================
+// ==================== OBSTACLES ====================
 function updateObstacles() {
   for (let o of obstacles) {
     o.x -= speed;
@@ -231,6 +252,7 @@ function updateObstacles() {
   }
 }
 
+// ==================== COINS ====================
 function updateCoins() {
   for (let c of coins) {
     c.x -= speed;
@@ -252,6 +274,7 @@ function updateCoins() {
   if (Math.random() < 0.045) coins.push({x:420, y:125});
 }
 
+// ==================== POWERUPS ====================
 function updatePowerups() {
   for (let p of powerups) {
     p.x -= speed;
@@ -272,7 +295,7 @@ function updatePowerups() {
   powerups = powerups.filter(p => p.x > -50);
 
   if (Math.random() < 0.008) {
-    powerups.push({x:420, type: Math.random()>0.5 ? "magnet" : "x2"});
+    powerups.push({x:420, type: Math.random() > 0.5 ? "magnet" : "x2"});
   }
 }
 
@@ -294,7 +317,9 @@ function createParticles(x, y, color) {
 function updateParticles() {
   for (let i = particles.length-1; i >=0; i--) {
     let p = particles[i];
-    p.x += p.vx; p.y += p.vy; p.life--;
+    p.x += p.vx; 
+    p.y += p.vy; 
+    p.life--;
     ctx.globalAlpha = p.life/22;
     ctx.fillStyle = p.color;
     ctx.fillRect(p.x, p.y, 7, 7);
@@ -303,20 +328,26 @@ function updateParticles() {
   particles = particles.filter(p => p.life > 0);
 }
 
-// Multiplayer (Simplified)
+// ==================== MULTIPLAYER ====================
 function updateMultiplayer() {
-  db.ref(`rooms/${room}/positions/${username}`).set({x:player.x, y:player.y, score:Math.floor(score)});
+  db.ref(`rooms/${room}/positions/${username}`).set({
+    x: player.x, 
+    y: player.y, 
+    score: Math.floor(score)
+  });
 }
 
 function listenToPlayers() {
-  db.ref(`rooms/${room}/positions`).on("value", s => otherPlayers = s.val() || {});
+  db.ref(`rooms/${room}/positions`).on("value", snap => {
+    otherPlayers = snap.val() || {};
+  });
 }
 
 // ==================== GAME OVER ====================
 function gameOver() {
   running = false;
   bgm.pause();
-  gameoverSound.play().catch(()=>{});
+  gameoverSound.play().catch(() => {});
   alert(`💥 CRASHED!\nScore: ${Math.floor(score)}\nCoins: ${totalCoins}`);
 }
 </script>
