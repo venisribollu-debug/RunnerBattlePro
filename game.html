@@ -5,96 +5,41 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Runner Battle PRO GOD 🔥</title>
   
-  <!-- PWA Setup -->
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#00ffcc">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Runner PRO">
+  <meta name="theme-color" content="#ff00aa">
 
   <style>
-    body { 
-      background: #000; 
-      color: white; 
-      text-align: center; 
-      margin: 0; 
-      padding: 0;
-      font-family: Arial, sans-serif;
-      overflow: hidden;
-      touch-action: manipulation;
-    }
-    
-    h2 { 
-      margin: 12px 0 8px; 
-      font-size: 24px;
-    }
-    
+    body { background:#000; color:white; text-align:center; margin:0; font-family:Arial; overflow:hidden; }
+    .container { max-width:420px; margin:0 auto; padding:10px; }
     canvas { 
-      background: linear-gradient(#111, #222); 
-      border-radius: 12px; 
-      margin: 10px auto;
-      display: block;
-      box-shadow: 0 0 25px rgba(0, 255, 204, 0.4);
-      max-width: 100%;
+      background: linear-gradient(#0a001f, #1a0033); 
+      border-radius:12px; 
+      margin:10px auto; 
+      display:block; 
+      box-shadow:0 0 30px #ff00ff;
     }
-    
-    input, button { 
-      padding: 12px 16px;
-      margin: 6px 4px;
-      border: none;
-      border-radius: 8px;
-      font-size: 16px;
-    }
-    
-    button { 
-      background: #00ffcc;
-      color: black;
-      font-weight: bold;
-      cursor: pointer;
-    }
-    
-    button:active {
-      transform: scale(0.95);
-    }
-    
-    #score { 
-      font-size: 18px; 
-      margin: 10px 0; 
-      font-weight: bold;
-      text-shadow: 0 0 10px #00ffcc;
-    }
-    
-    .container { 
-      max-width: 420px; 
-      margin: 0 auto; 
-      padding: 10px;
-    }
+    input, button { padding:12px; margin:6px; border-radius:8px; font-size:16px; }
+    button { background:#ff00aa; color:white; font-weight:bold; }
+    #score { font-size:20px; margin:8px; font-weight:bold; text-shadow:0 0 10px #ff00ff; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>🏃 Runner Battle PRO GOD 🔥</h2>
-    
-    <input id="username" placeholder="Enter Username" maxlength="15">
+    <h2>🏃‍♂️ SUBWAY RUNNER PRO GOD 🔥</h2>
+    <input id="username" placeholder="Username" maxlength="15">
     <input id="room" placeholder="Room Code (optional)">
     <button onclick="joinGame()">🚀 START GAME</button>
-    
-    <br>
-    <button onclick="buySkin('red')">🔴 Red Skin (100)</button>
-    <button onclick="buySkin('lime')">🟢 Lime Skin (200)</button>
-    <button id="installBtn">📱 Install PWA</button>
-
     <canvas id="game" width="400" height="220"></canvas>
-    <div id="score">Score: 0 | Coins: 0 | Rank: Bronze</div>
-    <div id="leaderboard" style="margin-top:10px; font-size:14px;"></div>
+    <div id="score">Score: 0 | Coins: 0</div>
   </div>
 
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
 <script>
-// ==================== FIREBASE CONFIG ====================
-const firebaseConfig = {
+// ==================== FIREBASE ====================
+const firebaseConfig =
+ {
   apiKey: "AIzaSyDnKwEe3HU6GhUP5FYaS-mdOhW6N2DGFGQ",
   authDomain: "game-making-747c0.firebaseapp.com",
   projectId: "game-making-747c0",
@@ -103,344 +48,276 @@ const firebaseConfig = {
   appId: "1:54678058247:web:036525d5d386bed1c8c1a2",
   measurementId: "G-CBHR4JX3LQ"
 };
-
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// ==================== GAME VARIABLES ====================
 let canvas = document.getElementById("game");
 let ctx = canvas.getContext("2d");
+
 let username = "", room = "";
 let running = false;
 
-let player = { x: 180, y: 150, vy: 0, width: 28, height: 28, targetX: 180, color: "cyan" };
-let lane = 1;
+let player = { x: 180, y: 140, vy: 0, lane: 1, sliding: false, slideTime: 0, animFrame: 0 };
 const laneX = [80, 180, 280];
 
 let obstacles = [];
 let coins = [];
+let powerups = [];
 let particles = [];
-
 let score = 0;
 let totalCoins = 0;
-let speed = 5.5;
-let baseSpeed = 5.5;
-
-let shield = false;
+let speed = 6;
+let multiplier = 1;
 let magnet = false;
-let doubleScore = false;
-let speedBoost = false;
+let bgOffset = 0;
 
 let otherPlayers = {};
-let leaderboardData = {};
 
-// ==================== JOIN GAME ====================
+// Sound
+const bgm = new Audio('bgm.mp3');
+const gameoverSound = new Audio('gameover.mp3');
+bgm.loop = true;
+
+// ==================== JOIN ====================
 function joinGame() {
-  username = document.getElementById("username").value.trim();
-  room = document.getElementById("room").value.trim() || "global_" + Math.floor(Math.random()*999);
-
-  if (!username) return alert("Please enter a username!");
+  username = document.getElementById("username").value.trim() || "Runner"+Math.floor(Math.random()*999);
+  room = document.getElementById("room").value.trim() || "global"+Math.floor(Math.random()*999);
 
   running = true;
-  loadPlayerData();
-  startGame();
+  bgm.play().catch(()=>{}); // autoplay may be blocked
   listenToPlayers();
-  listenToLeaderboard();
+  startGame();
 }
 
-// ==================== LOAD PLAYER DATA ====================
-function loadPlayerData() {
-  db.ref("users/" + username).once("value", snap => {
-    const data = snap.val() || {};
-    if (data.skin) player.color = data.skin;
-    totalCoins = data.coins || 0;
-  });
-}
-
-// ==================== BUY SKIN ====================
-function buySkin(color) {
-  const cost = color === "red" ? 100 : 200;
-  db.ref("users/" + username + "/coins").once("value", snap => {
-    let coins = snap.val() || 0;
-    if (coins >= cost) {
-      db.ref("users/" + username).update({
-        coins: coins - cost,
-        skin: color
-      });
-      player.color = color;
-      alert("✅ Skin equipped successfully!");
-    } else {
-      alert("Not enough coins!");
-    }
-  });
-}
-
-// ==================== START GAME ====================
 function startGame() {
-  score = 0;
-  obstacles = [];
-  coins = [];
-  particles = [];
-  speed = baseSpeed;
-  player.y = 150;
-  player.vy = 0;
+  score = 0; totalCoins = 0; speed = 6; multiplier = 1;
+  obstacles = []; coins = []; powerups = [];
+  player.y = 140;
   gameLoop();
 }
 
 // ==================== CONTROLS ====================
-document.addEventListener("keydown", e => {
-  if (e.key === "ArrowLeft" && lane > 0) lane--;
-  if (e.key === "ArrowRight" && lane < 2) lane++;
-  if (e.code === "Space") jump();
-});
-
-let touchStartX = 0;
+let touchStartY = 0;
 canvas.addEventListener("touchstart", e => {
-  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
   jump();
 });
 
 canvas.addEventListener("touchend", e => {
-  let touchEndX = e.changedTouches[0].clientX;
-  if (touchEndX - touchStartX > 50 && lane < 2) lane++;
-  if (touchStartX - touchEndX > 50 && lane > 0) lane--;
+  let dy = e.changedTouches[0].clientY - touchStartY;
+  if (dy > 40) slide();
+});
+
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowLeft" && player.lane > 0) player.lane--;
+  if (e.key === "ArrowRight" && player.lane < 2) player.lane++;
+  if (e.code === "Space") jump();
+  if (e.key === "ArrowDown") slide();
 });
 
 function jump() {
-  if (player.y >= 148) {
-    player.vy = -13;
+  if (player.y >= 138 && !player.sliding) player.vy = -17;
+}
+
+function slide() {
+  if (player.y >= 138 && !player.sliding) {
+    player.sliding = true;
+    player.slideTime = 40;
   }
 }
 
 // ==================== GAME LOOP ====================
-let lastTime = 0;
-function gameLoop(timestamp = 0) {
+function gameLoop() {
   if (!running) return;
+  ctx.clearRect(0, 0, 400, 220);
 
-  const delta = Math.min(timestamp - lastTime, 32);
-  lastTime = timestamp;
+  bgOffset -= speed * 0.6;
+  drawBackground();
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // Update player position (smooth lane change)
-  player.targetX = laneX[lane];
-  player.x += (player.targetX - player.x) * 0.25;
-
-  // Physics
-  player.vy += 0.75;
+  // Player Movement
+  player.x += (laneX[player.lane] - player.x) * 0.28;
+  player.vy += 0.9;
   player.y += player.vy;
-  if (player.y >= 150) {
-    player.y = 150;
-    player.vy = 0;
+  if (player.y >= 140) { player.y = 140; player.vy = 0; }
+
+  if (player.slideTime > 0) {
+    player.slideTime--;
+    if (player.slideTime === 0) player.sliding = false;
   }
 
-  // Draw ground
-  ctx.fillStyle = "#333";
-  ctx.fillRect(0, 170, 400, 50);
+  player.animFrame = (player.animFrame + 0.3) % 4;
 
-  // Draw Player
-  ctx.shadowColor = shield ? "#00ffff" : player.color;
-  ctx.shadowBlur = shield ? 25 : 12;
-  ctx.fillStyle = player.color;
-  ctx.beginPath();
-  ctx.roundRect(player.x, player.y, player.width, player.height, 8);
-  ctx.fill();
-  ctx.shadowBlur = 0;
+  drawPlayer();
 
-  updateAndDrawObstacles();
-  updateAndDrawCoins();
+  updateObstacles();
+  updateCoins();
+  updatePowerups();
   updateParticles();
-
   updateMultiplayer();
-  updateUI();
+
+  score += 0.3 * multiplier;
+  if (score % 400 < 0.4) speed += 0.3;
+
+  document.getElementById("score").innerHTML = 
+    `Score: ${Math.floor(score)} | Coins: ${totalCoins} ${multiplier>1?'(x'+multiplier+')':''}`;
 
   requestAnimationFrame(gameLoop);
 }
 
-// ==================== OBSTACLES ====================
-function updateAndDrawObstacles() {
+// ==================== BACKGROUND ====================
+function drawBackground() {
+  // Buildings
+  ctx.fillStyle = "#220033";
+  for (let i = 0; i < 6; i++) {
+    let x = (i * 90 + bgOffset * 0.3) % 550 - 50;
+    ctx.fillRect(x, 60, 60, 100);
+    ctx.fillRect(x+15, 40, 25, 30);
+  }
+
+  // Far Trains
+  ctx.fillStyle = "#440066";
+  for (let i = 0; i < 3; i++) {
+    let x = (i * 250 + bgOffset * 0.8) % 800 - 100;
+    ctx.fillRect(x, 110, 80, 35);
+  }
+}
+
+// ==================== PLAYER (Better Animation) ====================
+function drawPlayer() {
+  ctx.shadowColor = "#00ffff";
+  ctx.shadowBlur = 25;
+
+  let legOffset = player.sliding ? 0 : Math.sin(player.animFrame) * 4;
+  let bodyY = player.sliding ? 155 : player.y;
+
+  // Body
+  ctx.fillStyle = "#00ffff";
+  ctx.fillRect(player.x + 4, bodyY, 26, player.sliding ? 18 : 28);
+
+  // Head
+  ctx.fillStyle = "#ffdd88";
+  ctx.fillRect(player.x + 18, bodyY - 8, 14, 14);
+
+  // Legs
+  if (!player.sliding) {
+    ctx.fillStyle = "#0088ff";
+    ctx.fillRect(player.x + 8, bodyY + 22, 6, 8 + legOffset);
+    ctx.fillRect(player.x + 20, bodyY + 22, 6, 8 - legOffset);
+  }
+
+  ctx.shadowBlur = 0;
+}
+
+// ==================== OBSTACLES, COINS, POWERUPS ====================
+function updateObstacles() {
   for (let o of obstacles) {
     o.x -= speed;
-
-    ctx.fillStyle = o.type === "train" ? "#8b00ff" : "#ff0044";
+    ctx.fillStyle = o.type === "train" ? "#9900ff" : "#ff3366";
     ctx.fillRect(o.x, o.y, o.width, o.height);
 
-    // Collision
-    if (
-      player.x < o.x + o.width &&
-      player.x + player.width > o.x &&
-      player.y < o.y + o.height &&
-      player.y + player.height > o.y
-    ) {
-      if (shield) shield = false;
-      else gameOver();
-    }
+    if (checkCollision(o)) gameOver();
   }
   obstacles = obstacles.filter(o => o.x > -50);
-}
 
-// ==================== COINS ====================
-function updateAndDrawCoins() {
-  for (let c of coins) {
-    c.x -= speed;
-    if (magnet && c.x > player.x - 40) c.x -= 6;
-
-    ctx.fillStyle = "#ffd700";
-    ctx.fillRect(c.x, c.y, 12, 12);
-
-    if (
-      player.x < c.x + 12 &&
-      player.x + player.width > c.x &&
-      player.y < c.y + 12 &&
-      player.y + player.height > c.y
-    ) {
-      let points = doubleScore ? 40 : 20;
-      score += points;
-      totalCoins += points;
-      createParticles(c.x, c.y, "#ffd700");
-      c.x = -100;
-    }
-  }
-  coins = coins.filter(c => c.x > -50);
-}
-
-// ==================== PARTICLES ====================
-function createParticles(x, y, color) {
-  for (let i = 0; i < 8; i++) {
-    particles.push({
-      x, y,
-      vx: Math.random() * 6 - 3,
-      vy: Math.random() * -5 - 2,
-      life: 25,
-      color
+  if (Math.random() < 0.028) {
+    let isTrain = Math.random() > 0.55;
+    obstacles.push({
+      x: 420,
+      y: isTrain ? 105 : 145,
+      width: isTrain ? 45 : 28,
+      height: isTrain ? 55 : 32,
+      type: isTrain ? "train" : "barrier"
     });
   }
 }
 
-function updateParticles() {
-  for (let i = particles.length - 1; i >= 0; i--) {
-    let p = particles[i];
-    p.x += p.vx;
-    p.y += p.vy;
-    p.life--;
-    p.vy += 0.3;
+function updateCoins() {
+  for (let c of coins) {
+    c.x -= speed;
+    if (magnet && c.x > player.x) c.x -= 5;
 
-    ctx.globalAlpha = p.life / 25;
+    ctx.fillStyle = "#ffff00";
+    ctx.shadowBlur = 20;
+    ctx.fillRect(c.x, c.y, 15, 15);
+    ctx.shadowBlur = 0;
+
+    if (checkCollision({x:c.x, y:c.y, width:15, height:15})) {
+      totalCoins += 10 * multiplier;
+      createParticles(c.x, c.y, "#ffff00");
+      c.x = -100;
+    }
+  }
+  coins = coins.filter(c => c.x > -50);
+
+  if (Math.random() < 0.045) coins.push({x:420, y:125});
+}
+
+function updatePowerups() {
+  for (let p of powerups) {
+    p.x -= speed;
+    ctx.fillStyle = p.type === "magnet" ? "#00ffff" : "#ff00ff";
+    ctx.fillRect(p.x, 100, 22, 22);
+
+    if (checkCollision({x:p.x, y:100, width:22, height:22})) {
+      if (p.type === "magnet") {
+        magnet = true;
+        setTimeout(() => magnet = false, 8000);
+      } else {
+        multiplier = 2;
+        setTimeout(() => multiplier = 1, 7000);
+      }
+      p.x = -100;
+    }
+  }
+  powerups = powerups.filter(p => p.x > -50);
+
+  if (Math.random() < 0.008) {
+    powerups.push({x:420, type: Math.random()>0.5 ? "magnet" : "x2"});
+  }
+}
+
+function checkCollision(o) {
+  let pHeight = player.sliding ? 18 : 32;
+  let pY = player.sliding ? 155 : player.y;
+  return (
+    player.x < o.x + o.width && player.x + 32 > o.x &&
+    pY < o.y + o.height && pY + pHeight > o.y
+  );
+}
+
+function createParticles(x, y, color) {
+  for (let i = 0; i < 15; i++) {
+    particles.push({x, y, vx: Math.random()*10-5, vy: Math.random()*8-7, life: 22, color});
+  }
+}
+
+function updateParticles() {
+  for (let i = particles.length-1; i >=0; i--) {
+    let p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.life--;
+    ctx.globalAlpha = p.life/22;
     ctx.fillStyle = p.color;
-    ctx.fillRect(p.x, p.y, 6, 6);
+    ctx.fillRect(p.x, p.y, 7, 7);
   }
   ctx.globalAlpha = 1;
   particles = particles.filter(p => p.life > 0);
 }
 
-// ==================== MULTIPLAYER & LEADERBOARD ====================
+// Multiplayer (Simplified)
 function updateMultiplayer() {
-  db.ref(`rooms/${room}/positions/${username}`).set({
-    x: player.x,
-    y: player.y,
-    color: player.color,
-    score: Math.floor(score)
-  });
-
-  for (let id in otherPlayers) {
-    if (id === username) continue;
-    let p = otherPlayers[id];
-    ctx.fillStyle = p.color || "orange";
-    ctx.globalAlpha = 0.7;
-    ctx.fillRect(p.x, p.y, 28, 28);
-    ctx.globalAlpha = 1;
-  }
+  db.ref(`rooms/${room}/positions/${username}`).set({x:player.x, y:player.y, score:Math.floor(score)});
 }
 
 function listenToPlayers() {
-  db.ref(`rooms/${room}/positions`).on("value", snap => {
-    otherPlayers = snap.val() || {};
-  });
+  db.ref(`rooms/${room}/positions`).on("value", s => otherPlayers = s.val() || {});
 }
-
-function listenToLeaderboard() {
-  db.ref(`rooms/${room}/positions`).on("value", snap => {
-    let data = snap.val() || {};
-    let sorted = Object.entries(data)
-      .sort((a, b) => (b[1].score || 0) - (a[1].score || 0))
-      .slice(0, 5);
-    
-    let html = "<b>🏆 Room Leaderboard</b><br>";
-    sorted.forEach(([name, info], i) => {
-      html += `${i+1}. ${name} - ${info.score || 0}<br>`;
-    });
-    document.getElementById("leaderboard").innerHTML = html;
-  });
-}
-
-// ==================== UI ====================
-function updateUI() {
-  score += 0.2;
-  let rank = score > 2000 ? "Legend" : score > 1000 ? "Gold" : score > 500 ? "Silver" : "Bronze";
-
-  document.getElementById("score").innerHTML = 
-    `Score: ${Math.floor(score)} | Coins: ${Math.floor(totalCoins)} | 🏆 ${rank}`;
-
-  // Power-up spawns
-  if (Math.floor(score) % 450 === 0 && !magnet) { magnet = true; setTimeout(() => magnet = false, 5000); }
-  if (Math.floor(score) % 650 === 0 && !shield) { shield = true; setTimeout(() => shield = false, 5000); }
-  if (Math.floor(score) % 800 === 0 && !speedBoost) {
-    speedBoost = true;
-    speed = baseSpeed * 1.6;
-    setTimeout(() => { speed = baseSpeed; speedBoost = false; }, 6000);
-  }
-  if (Math.floor(score) % 550 === 0 && !doubleScore) {
-    doubleScore = true;
-    setTimeout(() => doubleScore = false, 7000);
-  }
-}
-
-// ==================== SPAWNERS ====================
-setInterval(() => {
-  if (!running) return;
-  let l = Math.floor(Math.random() * 3);
-  let isTrain = Math.random() > 0.65;
-
-  obstacles.push({
-    x: laneX[l],
-    y: isTrain ? 118 : 150,
-    width: 28,
-    height: isTrain ? 45 : 22,
-    type: isTrain ? "train" : "block"
-  });
-}, 1100);
-
-setInterval(() => {
-  if (!running) return;
-  let l = Math.floor(Math.random() * 3);
-  coins.push({ x: laneX[l], y: 135 });
-}, 950);
 
 // ==================== GAME OVER ====================
 function gameOver() {
   running = false;
-  
-  db.ref("users/" + username).update({
-    coins: Math.floor(totalCoins),
-    bestScore: Math.max(score, 0)
-  });
-
-  alert(`💀 Game Over!\nScore: ${Math.floor(score)}\nCoins Earned: ${Math.floor(totalCoins)}`);
-}
-
-// ==================== PWA INSTALL ====================
-let deferredPrompt;
-window.addEventListener("beforeinstallprompt", e => {
-  deferredPrompt = e;
-});
-
-document.getElementById("installBtn").onclick = () => {
-  if (deferredPrompt) deferredPrompt.prompt();
-};
-
-// Service Worker
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("service-worker.js");
+  bgm.pause();
+  gameoverSound.play().catch(()=>{});
+  alert(`💥 CRASHED!\nScore: ${Math.floor(score)}\nCoins: ${totalCoins}`);
 }
 </script>
 </body>
